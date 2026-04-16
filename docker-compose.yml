@@ -1,0 +1,204 @@
+networks:
+  fleet-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  pgadmin_data:
+  grafana_data:
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: fleet-postgres
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: keycloak_db
+    ports:
+      - "5431:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./data/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - fleet-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d keycloak_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: fleet-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@gmail.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    ports:
+      - "5050:80"
+    networks:
+      - fleet-network
+
+  # ════════════════════════════════
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.5.5
+    container_name: fleet-keycloak
+    restart: unless-stopped
+    command: start-dev
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak_db
+      KC_DB_USERNAME: ${POSTGRES_USER}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      KC_HEALTH_ENABLED: "true"
+      # ✅ Important : permet à Keycloak d'émettre des issuers avec l'URL publique
+      # même quand accédé depuis le réseau interne Docker
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_BACKCHANNEL: "false"
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - fleet-network
+    healthcheck:
+      test: ["CMD", "bash", "-lc", "echo > /dev/tcp/127.0.0.1/9000"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    container_name: fleet_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    networks:
+      - fleet-network
+
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    container_name: fleet-api-gateway
+    restart: unless-stopped
+    ports:
+      - "8888:8888"
+    environment:
+      KEYCLOAK_URL: ${KEYCLOAK_URL}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID}
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
+      SPRING_PROFILES_ACTIVE: docker
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      FRONTEND_URL: ${FRONTEND_URL}
+    depends_on:
+      keycloak:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - fleet-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: fleet-frontend
+    restart: unless-stopped
+    ports:
+      - "4200:80"
+    environment:
+      API_GATEWAY_URL: ${API_GATEWAY_URL:-http://api-gateway:8888}
+    depends_on:
+      - api-gateway
+    networks:
+      - fleet-network
+
+  # ════════════════════════════════
+  # Grafana avec SSO Keycloak
+  # ════════════════════════════════
+  grafana:
+    image: grafana/grafana:latest
+    container_name: fleet-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      # ── Identité / URL ─────────────────────────────────
+      # Grafana est exposé via le Gateway sur /grafana/
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL}
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+
+      # ── Désactive le login natif (force le SSO) ───────
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_AUTH_OAUTH_AUTO_LOGIN: "true"
+      GF_AUTH_DISABLE_SIGNOUT_MENU: "false"
+      # Après logout, redirige vers le Gateway qui gère le logout global
+      GF_AUTH_SIGNOUT_REDIRECT_URL: http://localhost:8888/logout
+
+      # ── Generic OAuth = Keycloak ──────────────────────
+      GF_AUTH_GENERIC_OAUTH_ENABLED: "true"
+      GF_AUTH_GENERIC_OAUTH_NAME: Keycloak
+      GF_AUTH_GENERIC_OAUTH_ALLOW_SIGN_UP: "true"
+      GF_AUTH_GENERIC_OAUTH_CLIENT_ID: grafana
+      GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET: ${GRAFANA_CLIENT_SECRET}
+      GF_AUTH_GENERIC_OAUTH_SCOPES: openid profile email
+      GF_AUTH_GENERIC_OAUTH_EMPTY_SCOPES: "false"
+
+      # ⚠️ Endpoints:
+      # - auth_url est utilisé par le NAVIGATEUR → URL publique localhost:8080
+      # - token_url & api_url sont utilisés par Grafana → URL interne keycloak:8080
+      GF_AUTH_GENERIC_OAUTH_AUTH_URL: ${KEYCLOAK_PUBLIC_URL}/realms/fleet-management/protocol/openid-connect/auth
+      GF_AUTH_GENERIC_OAUTH_TOKEN_URL: ${KEYCLOAK_INTERNAL_URL}/realms/fleet-management/protocol/openid-connect/token
+      GF_AUTH_GENERIC_OAUTH_API_URL: ${KEYCLOAK_INTERNAL_URL}/realms/fleet-management/protocol/openid-connect/userinfo
+      # Signout URL pointe vers Keycloak (utilisé quand l'utilisateur fait Sign Out dans Grafana)
+      GF_AUTH_GENERIC_OAUTH_SIGNOUT_REDIRECT_URL: ${KEYCLOAK_PUBLIC_URL}/realms/fleet-management/protocol/openid-connect/logout
+
+      # ── Mapping des rôles Keycloak → Grafana ──────────
+      # JMESPath qui lit le claim "roles" (ajouté via le mapper realm-roles)
+      # et le convertit en rôle Grafana
+      GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH: "contains(roles[*], 'Admin') && 'Admin' || contains(roles[*], 'Editor') && 'Editor' || 'Viewer'"
+      GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_STRICT: "false"
+
+      # ── Back-channel logout ───────────────────────────
+      # Grafana écoute le logout notifié par Keycloak
+      GF_AUTH_GENERIC_OAUTH_ALLOW_INSECURE_EMAIL_LOOKUP: "true"
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
+      GF_SECURITY_COOKIE_SAMESITE: lax
+
+      # ── Plugins & Admin bootstrap (pour l'accès initial) ──
+      GF_INSTALL_PLUGINS: grafana-mqtt-datasource
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/mqtt.yaml:/etc/grafana/provisioning/datasources/mqtt.yaml:ro
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    networks:
+      - fleet-network
+
+  mosquitto:
+    image: eclipse-mosquitto:2.0
+    container_name: fleet-mosquitto
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+    networks:
+      - fleet-network
