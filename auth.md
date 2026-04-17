@@ -110,3 +110,22 @@ Ton architecture d'authentification est solide et moderne:
 - Protection backend centralisee dans le gateway
 - Relay de token vers les microservices
 - Logout global cohérent multi-onglets
+
+
+
+
+enabled = true
+name = Keycloak-OAuth
+allow_sign_up = true
+auto_login = true
+client_id = grafana
+client_secret = NflDifb7DDDQingXOwYsOb5WQ3OdiLvU
+scopes = openid email profile offline_access roles
+email_attribute_path = email
+login_attribute_path = username
+name_attribute_path = full_name
+auth_url = http://localhost:8080/realms/fleet-management/protocol/openid-connect/auth
+token_url = http://localhost:8080/realms/fleet-management/protocol/openid-connect/token
+api_url = http://localhost:8080/realms/fleet-management/protocol/openid-connect/userinfo
+role_attribute_path = contains(realm_access.roles[*], 'grafana-admin') && 'Admin' || contains(realm_access.roles[*][*], 'grafana-Viewer') &&'Viewer'|| contains(realm_access.roles[*][*], 'grafana-Editor') && 'Editor'
+skip_org_role_sync = false
