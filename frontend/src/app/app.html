@@ -1,0 +1,13 @@
+<div class="app-layout" [class.sidebar-expanded]="sidebarExpanded">
+  <app-sidebar (expandedChange)="onSidebarExpandedChange($event)"></app-sidebar>
+
+  <main class="app-content">
+    @if (auth.isLoading()) {
+      <div class="loading-wrap">
+        <app-loading-spinner />
+      </div>
+    } @else {
+      <router-outlet />
+    }
+  </main>
+</div>

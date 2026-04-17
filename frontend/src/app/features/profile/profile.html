@@ -1,0 +1,20 @@
+<section class="page-card">
+  <h1>Profile</h1>
+
+  @if (user(); as u) {
+    <dl>
+      <div>
+        <dt>Username</dt>
+        <dd>{{ u.username }}</dd>
+      </div>
+      <div>
+        <dt>Email</dt>
+        <dd>{{ u.email }}</dd>
+      </div>
+      <div>
+        <dt>Roles</dt>
+        <dd>{{ u.roles.join(', ') }}</dd>
+      </div>
+    </dl>
+  }
+</section>

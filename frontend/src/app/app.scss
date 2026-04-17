@@ -1,0 +1,41 @@
+:host {
+  --sidebar-collapsed-width: clamp(4.25rem, 7vw, 4.75rem);
+  --sidebar-expanded-width: clamp(15.5rem, 22vw, 18.5rem);
+  --app-bg: linear-gradient(135deg, #e0e9ef 0%, #eef3f7 42%, #f8fafc 100%);
+
+  display: block;
+  min-height: 100dvh;
+  background: var(--app-bg);
+}
+
+.app-layout {
+  min-height: 100dvh;
+}
+
+.app-content {
+  min-height: 100dvh;
+  margin-inline-start: var(--sidebar-collapsed-width);
+  padding: clamp(0rem, 0vw, 1.8rem);
+  transition: margin-inline-start 220ms ease;
+}
+
+.app-layout.sidebar-expanded .app-content {
+  margin-inline-start: var(--sidebar-expanded-width);
+}
+
+.loading-wrap {
+  min-height: calc(100dvh - clamp(2rem, 5vw, 3.6rem));
+  display: grid;
+  place-items: center;
+}
+
+@media (max-width: 48rem) {
+  :host {
+    --sidebar-collapsed-width: clamp(3.8rem, 16vw, 4.4rem);
+    --sidebar-expanded-width: clamp(12rem, 64vw, 15rem);
+  }
+
+  .app-content {
+    padding: clamp(0.8rem, 3vw, 1rem);
+  }
+}

@@ -1,0 +1,32 @@
+:host {
+  display: block;
+}
+
+.page-card {
+  background: rgba(255, 255, 255, 0.84);
+  border: 0.06rem solid rgba(11, 23, 34, 0.08);
+  border-radius: 1rem;
+  padding: clamp(1rem, 2.5vw, 1.5rem);
+}
+
+dl {
+  margin: 0;
+  display: grid;
+  gap: 0.8rem;
+}
+
+div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+dt {
+  color: #4c6277;
+  font-size: 0.8rem;
+}
+
+dd {
+  margin: 0;
+  color: #102132;
+  font-weight: 600;
+}

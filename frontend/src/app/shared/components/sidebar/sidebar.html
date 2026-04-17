@@ -1,0 +1,42 @@
+<aside
+  class="sidebar"
+  [class.expanded]="expanded()"
+  (mouseenter)="onMouseEnter()"
+  (mouseleave)="onMouseLeave()"
+>
+  <section class="top-section">
+    <a class="brand" routerLink="/dashboard" aria-label="Go to dashboard">
+      <span class="brand-mark">FM</span>
+      <span class="brand-text">Fleet Management</span>
+    </a>
+  </section>
+
+  <nav class="menu-section" aria-label="Sidebar navigation">
+    @for (item of items; track item.route) {
+      <a
+        class="menu-item"
+        [routerLink]="item.route"
+        routerLinkActive="active"
+        [routerLinkActiveOptions]="{ exact: item.route === '/dashboard' }"
+      >
+        <span class="menu-icon" [attr.data-icon]="item.icon" aria-hidden="true"></span>
+        <span class="menu-label">{{ item.label }}</span>
+      </a>
+    }
+  </nav>
+
+  <section class="bottom-section">
+    <a class="profile-link" routerLink="/profile" routerLinkActive="active">
+      <span class="avatar">{{ avatarLetter() }}</span>
+      <span class="profile-info">
+        <span class="name">{{ user()?.username || 'User' }}</span>
+        <span class="mail">{{ user()?.email || 'profile' }}</span>
+      </span>
+    </a>
+
+    <button type="button" class="logout-btn" (click)="logout()">
+      <span class="menu-icon" data-icon="logout" aria-hidden="true"></span>
+      <span class="menu-label">Logout</span>
+    </button>
+  </section>
+</aside>

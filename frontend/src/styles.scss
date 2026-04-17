@@ -1,0 +1,30 @@
+/* ── Reset flash blanc entre routes ───────────────── */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  min-height: 100vh;
+  background: #cfd7e8;   /* même couleur que ton app */
+  color: #f1f5f9;
+  font-family: 'Inter', sans-serif;
+}
+
+/* Évite le flash pendant le lazy loading Angular */
+router-outlet + * {
+  display: block;
+  min-height: 100vh;
+  background: #cfd7e8;
+}
+
+/* View Transitions API — fondu entre routes (Angular 20) */
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 150ms;
+  animation-timing-function: ease-in-out;
+}

@@ -49,7 +49,9 @@ services:
     image: quay.io/keycloak/keycloak:26.5.5
     container_name: fleet-keycloak
     restart: unless-stopped
-    command: start-dev
+    command: 
+     - start-dev
+     - --spi-login-protocol-openid-connect-suppress-logout-confirmation-screen=true
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
@@ -162,8 +164,6 @@ services:
       GF_AUTH_GENERIC_OAUTH_AUTH_URL: ${KEYCLOAK_PUBLIC_URL}/realms/fleet-management/protocol/openid-connect/auth
       GF_AUTH_GENERIC_OAUTH_TOKEN_URL: ${KEYCLOAK_INTERNAL_URL}/realms/fleet-management/protocol/openid-connect/token
       GF_AUTH_GENERIC_OAUTH_API_URL: ${KEYCLOAK_INTERNAL_URL}/realms/fleet-management/protocol/openid-connect/userinfo
-      # Signout URL pointe vers Keycloak (utilisé quand l'utilisateur fait Sign Out dans Grafana)
-      GF_AUTH_GENERIC_OAUTH_SIGNOUT_REDIRECT_URL: ${KEYCLOAK_PUBLIC_URL}/realms/fleet-management/protocol/openid-connect/logout
 
       # ── Mapping des rôles Keycloak → Grafana ──────────
       # JMESPath qui lit le claim "roles" (ajouté via le mapper realm-roles)
