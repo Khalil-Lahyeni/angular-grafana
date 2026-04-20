@@ -51,7 +51,6 @@ services:
     restart: unless-stopped
     command: 
      - start-dev
-     - --spi-login-protocol-openid-connect-suppress-logout-confirmation-screen=true
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN}
       KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
@@ -126,7 +125,7 @@ services:
       - api-gateway
     networks:
       - fleet-network
-
+    
   # ════════════════════════════════
   # Grafana avec SSO Keycloak
   # ════════════════════════════════
@@ -137,51 +136,37 @@ services:
     ports:
       - "3000:3000"
     environment:
-      # ── Identité / URL ─────────────────────────────────
-      # Grafana est exposé via le Gateway sur /grafana/
-      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL}
-      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
-
-      # ── Désactive le login natif (force le SSO) ───────
-      GF_AUTH_DISABLE_LOGIN_FORM: "true"
-      GF_AUTH_OAUTH_AUTO_LOGIN: "true"
-      GF_AUTH_DISABLE_SIGNOUT_MENU: "false"
-      # Après logout, redirige vers le Gateway qui gère le logout global
-      GF_AUTH_SIGNOUT_REDIRECT_URL: http://localhost:8888/logout
-
-      # ── Generic OAuth = Keycloak ──────────────────────
-      GF_AUTH_GENERIC_OAUTH_ENABLED: "true"
-      GF_AUTH_GENERIC_OAUTH_NAME: Keycloak
-      GF_AUTH_GENERIC_OAUTH_ALLOW_SIGN_UP: "true"
-      GF_AUTH_GENERIC_OAUTH_CLIENT_ID: grafana
-      GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET: ${GRAFANA_CLIENT_SECRET}
-      GF_AUTH_GENERIC_OAUTH_SCOPES: openid profile email
-      GF_AUTH_GENERIC_OAUTH_EMPTY_SCOPES: "false"
-
-      # ⚠️ Endpoints:
-      # - auth_url est utilisé par le NAVIGATEUR → URL publique localhost:8080
-      # - token_url & api_url sont utilisés par Grafana → URL interne keycloak:8080
-      GF_AUTH_GENERIC_OAUTH_AUTH_URL: ${KEYCLOAK_PUBLIC_URL}/realms/fleet-management/protocol/openid-connect/auth
-      GF_AUTH_GENERIC_OAUTH_TOKEN_URL: ${KEYCLOAK_INTERNAL_URL}/realms/fleet-management/protocol/openid-connect/token
-      GF_AUTH_GENERIC_OAUTH_API_URL: ${KEYCLOAK_INTERNAL_URL}/realms/fleet-management/protocol/openid-connect/userinfo
-
-      # ── Mapping des rôles Keycloak → Grafana ──────────
-      # JMESPath qui lit le claim "roles" (ajouté via le mapper realm-roles)
-      # et le convertit en rôle Grafana
-      GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH: "contains(roles[*], 'Admin') && 'Admin' || contains(roles[*], 'Editor') && 'Editor' || 'Viewer'"
-      GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_STRICT: "false"
-
-      # ── Back-channel logout ───────────────────────────
-      # Grafana écoute le logout notifié par Keycloak
-      GF_AUTH_GENERIC_OAUTH_ALLOW_INSECURE_EMAIL_LOOKUP: "true"
-      GF_SECURITY_ALLOW_EMBEDDING: "true"
-      GF_SECURITY_COOKIE_SAMESITE: lax
-
-      # ── Plugins & Admin bootstrap (pour l'accès initial) ──
       GF_INSTALL_PLUGINS: grafana-mqtt-datasource
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin
 
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL}
+
+      # ===== SECURITY =====
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
+
+      # ===== OAUTH KEYCLOAK =====
+      GF_AUTH_GENERIC_OAUTH_ENABLED: "true"
+      GF_AUTH_GENERIC_OAUTH_NAME: Keycloak
+      GF_AUTH_GENERIC_OAUTH_ALLOW_SIGN_UP: "true"
+      GF_AUTH_GENERIC_OAUTH_AUTO_LOGIN: "true"
+
+      GF_AUTH_GENERIC_OAUTH_CLIENT_ID: grafana
+      GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET: ${GRAFANA_CLIENT_SECRET}
+
+      GF_AUTH_GENERIC_OAUTH_SCOPES: openid email profile offline_access roles
+
+      GF_AUTH_GENERIC_OAUTH_LOGIN_ATTRIBUTE_PATH: username
+      GF_AUTH_GENERIC_OAUTH_NAME_ATTRIBUTE_PATH: full_name
+      GF_AUTH_GENERIC_OAUTH_EMAIL_ATTRIBUTE_PATH: email
+
+      # URL publique pour le navigateur, URL interne pour les appels serveur Grafana
+      GF_AUTH_GENERIC_OAUTH_AUTH_URL: ${KEYCLOAK_PUBLIC_URL}/realms/fleet-management/protocol/openid-connect/auth
+      GF_AUTH_GENERIC_OAUTH_TOKEN_URL: ${KEYCLOAK_INTERNAL_URL}/realms/fleet-management/protocol/openid-connect/token
+      GF_AUTH_GENERIC_OAUTH_API_URL: ${KEYCLOAK_INTERNAL_URL}/realms/fleet-management/protocol/openid-connect/userinfo
+
+      GF_AUTH_GENERIC_OAUTH_ROLE_ATTRIBUTE_PATH: contains(realm_access.roles[*], 'admin') && 'Admin' || contains(realm_access.roles[*], 'editor') && 'Editor' || 'Viewer'
+      GF_AUTH_GENERIC_OAUTH_SKIP_ORG_ROLE_SYNC: "false" 
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/mqtt.yaml:/etc/grafana/provisioning/datasources/mqtt.yaml:ro

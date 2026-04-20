@@ -9,6 +9,9 @@ spring:
   cloud:
     config:
       enabled: false
+    inetutils:
+      default-hostname: localhost
+      default-ip-address: 127.0.0.1
   security:
     oauth2:
       client:
@@ -54,6 +57,7 @@ logging:
   level:
     com.fleetmanagement.gateway: DEBUG
     org.springframework.cloud.gateway: INFO
+    org.springframework.cloud.commons.util.InetUtils: ERROR
     org.springframework.security: INFO
 
 # ══════════════════════════════
